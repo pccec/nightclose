@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#F7F6F2" />
+  <title>收場影相拼圖</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans TC"', '"PingFang HK"', '"Inter"', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+          colors: {
+            warmbg: '#F6F5F1',
+            ink: '#1F2421',
+            brand: '#2E6F5E',
+            brandDark: '#235649',
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Ensure smooth touch interactions and iOS safe area handling */
+    html, body {
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior-y: none;
+      background-color: #F6F5F1;
+      color: #1F2421;
+    }
+
+    .safe-bottom {
+      padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    }
+
+    .safe-top {
+      padding-top: max(0.75rem, env(safe-area-inset-top));
+    }
+
+    /* Subtle animations for modals & toasts */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+      animation: fadeIn 0.18s ease-out forwards;
+    }
+    .animate-slide-up {
+      animation: slideUp 0.22s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="font-sans antialiased min-h-screen flex flex-col selection:bg-emerald-100">
+
+  <!-- ==================== STICKY TOP HEADER & ROUTE TABS ==================== -->
+  <header class="sticky top-0 z-30 bg-warmbg/95 backdrop-blur-md border-b border-stone-200/80 safe-top">
+    <div class="max-w-lg mx-auto px-4 pb-3">
+      <!-- App Title -->
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-brand text-white flex items-center justify-center shadow-sm">
+            <!-- Camera SVG Icon -->
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <h1 class="text-lg font-bold tracking-tight text-ink">收場影相拼圖</h1>
+        </div>
+        <span class="text-xs font-medium text-stone-500 bg-stone-200/70 px-2.5 py-1 rounded-full">即影即拼</span>
+      </div>
+
+      <!-- Route Switcher Tabs (G/F 線 & B1/F 線) -->
+      <div class="grid grid-cols-2 gap-1.5 p-1 bg-stone-200/80 rounded-2xl" role="tablist" aria-label="收場路線">
+        <button
+          id="tab-gf"
+          type="button"
+          role="tab"
+          aria-selected="true"
+          onclick="switchRoute('gf')"
+          class="py-2.5 px-3 rounded-xl text-sm font-bold transition-all duration-150 focus:outline-none"
+        >
+          G/F 線
+        </button>
+        <button
+          id="tab-b1f"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          onclick="switchRoute('b1f')"
+          class="py-2.5 px-3 rounded-xl text-sm font-bold transition-all duration-150 focus:outline-none"
+        >
+          B1/F 線
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN LOCATION CARDS LIST ==================== -->
+  <main class="flex-1 w-full max-w-lg mx-auto px-4 pt-3 pb-44">
+    <!-- Subtle helper hint (zero pressure, no counters) -->
+    <p id="route-subtitle" class="text-xs text-stone-500 mb-3 px-1">
+      行到邊影到邊，未影嘅項目會自動略過。
+    </p>
+
+    <!-- Dynamically rendered location cards -->
+    <div id="locations-container" class="space-y-3"></div>
+  </main>
+
+  <!-- ==================== STICKY BOTTOM ACTION BAR ==================== -->
+  <footer class="fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-stone-200 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] safe-bottom">
+    <div class="max-w-lg mx-auto px-4 pt-2.5">
+      <!-- Layout Mode Segmented Pill -->
+      <div class="grid grid-cols-2 gap-1 p-1 bg-stone-100 rounded-xl mb-2.5 border border-stone-200/70">
+        <button
+          id="mode-split"
+          type="button"
+          onclick="switchLayoutMode('split')"
+          class="py-1.5 px-2 rounded-lg text-xs font-semibold transition-all duration-150"
+        >
+          高清分圖 (每6張1幅)
+        </button>
+        <button
+          id="mode-long"
+          type="button"
+          onclick="switchLayoutMode('long')"
+          class="py-1.5 px-2 rounded-lg text-xs font-semibold transition-all duration-150"
+        >
+          單張長圖
+        </button>
+      </div>
+
+      <!-- Primary & Secondary Action Buttons -->
+      <div class="flex items-center gap-2.5">
+        <button
+          id="btn-clear"
+          type="button"
+          onclick="openClearConfirm()"
+          class="px-4 py-3.5 rounded-2xl text-sm font-semibold text-stone-600 bg-stone-100 hover:bg-stone-200 active:scale-[0.98] transition-all disabled:opacity-40 disabled:pointer-events-none"
+        >
+          清空
+        </button>
+
+        <button
+          id="btn-generate"
+          type="button"
+          onclick="handleGenerateCollage()"
+          class="flex-1 py-3.5 px-5 rounded-2xl text-base font-bold text-white bg-brand hover:bg-brandDark active:scale-[0.98] shadow-sm transition-all flex items-center justify-center gap-2 disabled:bg-stone-300 disabled:text-stone-500 disabled:shadow-none disabled:pointer-events-none"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+          </svg>
+          <span>生成拼圖</span>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==================== HIDDEN FILE INPUTS ==================== -->
+  <!-- Direct Rear Camera Capture -->
+  <input id="input-camera" type="file" accept="image/*" capture="environment" class="hidden" />
+  <!-- Gallery Picker (Supports Multiple) -->
+  <input id="input-gallery" type="file" accept="image/*" multiple class="hidden" />
+
+  <!-- ==================== EXPORT / PREVIEW MODAL ==================== -->
+  <div id="export-modal" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center animate-fade-in">
+    <div class="bg-warmbg w-full max-w-lg max-h-[92vh] rounded-t-3xl sm:rounded-3xl flex flex-col overflow-hidden shadow-2xl animate-slide-up">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-5 py-4 bg-white border-b border-stone-200">
+        <h2 id="export-modal-title" class="text-base font-bold text-ink">拼圖預覽</h2>
+        <button
+          type="button"
+          onclick="closeExportModal()"
+          class="w-9 h-9 rounded-full bg-stone-100 text-stone-600 flex items-center justify-center hover:bg-stone-200 active:scale-95 transition"
+          aria-label="關閉"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Modal Scrollable Body -->
+      <div id="export-modal-body" class="flex-1 overflow-y-auto p-4 space-y-5">
+        <!-- Generated collage cards injected here -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="bg-white border-t border-stone-200 px-5 py-3.5 safe-bottom space-y-2.5">
+        <!-- Share All button (shown when Web Share API supports sharing files & multiple images exist) -->
+        <button
+          id="btn-share-all"
+          type="button"
+          onclick="shareAllCollages()"
+          class="hidden w-full py-3 px-4 rounded-2xl bg-brand hover:bg-brandDark text-white font-bold text-sm active:scale-[0.98] transition flex items-center justify-center gap-2 shadow-sm"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+          <span>直接分享全部圖片</span>
+        </button>
+        <p class="text-xs text-stone-500 text-center leading-relaxed">
+          提示：亦可以長按圖片直接複製或儲存，發送完後記得返主頁撳「清空」。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PHOTO LIGHTBOX MODAL ==================== -->
+  <div id="lightbox-modal" class="fixed inset-0 z-50 hidden bg-black/90 backdrop-blur-sm flex flex-col items-center justify-between p-4 safe-top safe-bottom animate-fade-in" onclick="closeLightbox(event)">
+    <div class="w-full max-w-lg flex items-center justify-between text-white py-2">
+      <span id="lightbox-title" class="text-base font-bold truncate pr-4"></span>
+      <button
+        type="button"
+        onclick="closeLightbox()"
+        class="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center hover:bg-white/25 transition"
+        aria-label="關閉預覽"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    <div class="flex-1 w-full max-w-lg flex items-center justify-center overflow-hidden my-2">
+      <img id="lightbox-img" src="" alt="相片預覽" class="max-h-full max-w-full object-contain rounded-2xl shadow-2xl" />
+    </div>
+
+    <div class="w-full max-w-lg flex justify-center py-2">
+      <button
+        id="lightbox-delete-btn"
+        type="button"
+        class="px-5 py-2.5 rounded-xl bg-red-500/90 hover:bg-red-600 text-white text-sm font-semibold active:scale-95 transition flex items-center gap-1.5"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+        <span>刪除此相片</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== CLEAR CONFIRMATION DIALOG ==================== -->
+  <div id="confirm-modal" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-xs flex items-center justify-center p-5 animate-fade-in">
+    <div class="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl animate-slide-up">
+      <h3 class="text-lg font-bold text-ink mb-2">清空本路線相片？</h3>
+      <p id="confirm-modal-desc" class="text-sm text-stone-600 mb-6 leading-relaxed">
+        確定要清空目前路線嘅所有相片？清空後無法復原。
+      </p>
+      <div class="grid grid-cols-2 gap-2.5">
+        <button
+          type="button"
+          onclick="closeClearConfirm()"
+          class="py-3 px-4 rounded-2xl bg-stone-100 text-stone-700 font-semibold text-sm hover:bg-stone-200 active:scale-95 transition"
+        >
+          取消
+        </button>
+        <button
+          type="button"
+          onclick="confirmClearRoute()"
+          class="py-3 px-4 rounded-2xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 active:scale-95 transition"
+        >
+          確定清空
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== LOADING OVERLAY ==================== -->
+  <div id="loading-overlay" class="fixed inset-0 z-50 hidden bg-black/45 backdrop-blur-xs flex items-center justify-center p-6">
+    <div class="bg-white rounded-3xl px-7 py-6 shadow-xl flex flex-col items-center gap-3">
+      <div class="w-9 h-9 border-4 border-stone-200 border-t-brand rounded-full animate-spin"></div>
+      <p id="loading-text" class="text-sm font-semibold text-ink">正在處理相片...</p>
+    </div>
+  </div>
+
+  <!-- ==================== TOAST NOTIFICATION ==================== -->
+  <div id="toast" class="fixed top-20 left-1/2 -translate-x-1/2 z-[60] hidden max-w-[90vw] bg-ink/95 text-white text-sm font-medium px-4 py-2.5 rounded-2xl shadow-lg text-center pointer-events-none">
+  </div>
+
+  <!-- ==================== APPLICATION SCRIPT ==================== -->
+  <script>
+    /**
+     * Route definitions (G/F & B1/F) strictly following venue closing rounds.
+     */
+    const ROUTES = {
+      gf: {
+        id: 'gf',
+        tabName: 'G/F 線',
+        collageTitle: 'G/F 收場紀錄',
+        filePrefix: 'GF_收場拼圖',
+        locations: [
+          { id: 'gf_1', name: '藝舍' },
+          { id: 'gf_2', name: '營舍' },
+          { id: 'gf_3', name: '悠舍' },
+          { id: 'gf_4', name: '漣舍' },
+          { id: 'gf_5', name: '悅舍' },
+          { id: 'gf_6', name: '老人院（冷氣／正門）' },
+          { id: 'gf_7', name: '舒心農莊外圍' },
+          { id: 'gf_8', name: 'We can cook 外圍' },
+          { id: 'gf_9', name: '松果樂園太陽傘' }
+        ]
+      },
+      b1f: {
+        id: 'b1f',
+        tabName: 'B1/F 線',
+        collageTitle: 'B1/F 收場紀錄',
+        filePrefix: 'B1F_收場拼圖',
+        locations: [
+          { id: 'b1_1', name: 'Tree Topia 水吧（拉帶）' },
+          { id: 'b1_2', name: 'Lite Bistro 枱面' },
+          { id: 'b1_3', name: 'Lite Bistro 戶外用餐區' },
+          { id: 'b1_4', name: '往松果樂園收餐具位' },
+          { id: 'b1_5', name: '健身室收手帶' },
+          { id: 'b1_6', name: '更衣室收手帶' },
+          { id: 'b1_7', name: '男更吹地機' },
+          { id: 'b1_8', name: '女更吹地機' },
+          { id: 'b1_9', name: '健身室洗手間' },
+          { id: 'b1_10', name: '球場大電視' },
+          { id: 'b1_11', name: '電競電腦' },
+          { id: 'b1_12', name: '賽車' },
+          { id: 'b1_13', name: 'Sports 會所圍封' },
+          { id: 'b1_14', name: 'Sports 會所冷氣' },
+          { id: 'b1_15', name: '新洗碗房冷氣／熄燈' },
+          { id: 'b1_16', name: '新三角倉冷氣' },
+          { id: 'b1_17', name: '餐廳會所冷氣' }
+        ]
+      }
+    };
+
+    /**
+     * App State
+     */
+    let currentRoute = localStorage.getItem('closing_route') || 'gf';
+    if (!ROUTES[currentRoute]) currentRoute = 'gf';
+
+    let layoutMode = localStorage.getItem('closing_layout') || 'split'; // 'split' | 'long'
+    if (layoutMode !== 'split' && layoutMode !== 'long') layoutMode = 'split';
+
+    // Map of locId -> Array of { id, route, locId, dataUrl, createdAt }
+    let photosByLoc = {};
+
+    // Currently targeted location for hidden camera/gallery input
+    let activeLocIdForInput = null;
+
+    // Currently generated collage outputs: Array of { dataUrl, blob, fileName }
+    let generatedCollages = [];
+
+    // Lightbox active photo reference
+    let lightboxPhotoRef = null;
+
+    // IndexedDB reference
+    let db = null;
+    const DB_NAME = 'ClosingPhotoCollageDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'photos';
+
+    // =========================================================================
+    // 1. INDEXEDDB PERSISTENCE (Crash-Proof & Offline-Ready)
+    // =========================================================================
+
+    function initDB() {
+      return new Promise((resolve) => {
+        try {
+          if (!window.indexedDB) {
+            resolve(null);
+            return;
+          }
+          const req = indexedDB.open(DB_NAME, DB_VERSION);
+          req.onupgradeneeded = (e) => {
+            const database = e.target.result;
+            if (!database.objectStoreNames.contains(STORE_NAME)) {
+              const store = database.createObjectStore(STORE_NAME, { keyPath: 'id' });
+              store.createIndex('route', 'route', { unique: false });
+              store.createIndex('locId', 'locId', { unique: false });
+            }
+          };
+          req.onsuccess = (e) => {
+            db = e.target.result;
+            resolve(db);
+          };
+          req.onerror = () => {
+            console.warn('IndexedDB unavailable, running in memory mode.');
+            resolve(null);
+          };
+        } catch (err) {
+          console.warn('IndexedDB error:', err);
+          resolve(null);
+        }
+      });
+    }
+
+    function loadAllPhotosFromDB() {
+      return new Promise((resolve) => {
+        if (!db) {
+          resolve();
+          return;
+        }
+        try {
+          const tx = db.transaction(STORE_NAME, 'readonly');
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.getAll();
+          req.onsuccess = () => {
+            const items = req.result || [];
+            // Sort by createdAt ascending to maintain capture order
+            items.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            photosByLoc = {};
+            for (const item of items) {
+              if (!photosByLoc[item.locId]) photosByLoc[item.locId] = [];
+              photosByLoc[item.locId].push(item);
+            }
+            resolve();
+          };
+          req.onerror = () => resolve();
+        } catch (err) {
+          console.warn('Failed reading from IndexedDB:', err);
+          resolve();
+        }
+      });
+    }
+
+    function savePhotoToDB(photoRecord) {
+      return new Promise((resolve) => {
+        if (!db) {
+          resolve();
+          return;
+        }
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          tx.objectStore(STORE_NAME).put(photoRecord);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        } catch (err) {
+          console.warn('Failed saving to IndexedDB:', err);
+          resolve();
+        }
+      });
+    }
+
+    function deletePhotoFromDB(photoId) {
+      return new Promise((resolve) => {
+        if (!db) {
+          resolve();
+          return;
+        }
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          tx.objectStore(STORE_NAME).delete(photoId);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        } catch (err) {
+          console.warn('Failed deleting from IndexedDB:', err);
+          resolve();
+        }
+      });
+    }
+
+    function clearRoutePhotosFromDB(routeId) {
+      return new Promise((resolve) => {
+        if (!db) {
+          resolve();
+          return;
+        }
+        try {
+          const tx = db.transaction(STORE_NAME, 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+          const index = store.index('route');
+          const req = index.openCursor(IDBKeyRange.only(routeId));
+          req.onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+              cursor.delete();
+              cursor.continue();
+            }
+          };
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        } catch (err) {
+          console.warn('Failed clearing route from IndexedDB:', err);
+          resolve();
+        }
+      });
+    }
+
+    // =========================================================================
+    // 2. CLIENT-SIDE IMAGE COMPRESSION (Max 1280px, JPEG 0.8)
+    // =========================================================================
+
+    function compressImageFile(file, maxDim = 1280, quality = 0.8) {
+      return new Promise((resolve, reject) => {
+        const objectUrl = URL.createObjectURL(file);
+        const img = new Image();
+
+        img.onload = () => {
+          try {
+            let { width, height } = img;
+            if (width > maxDim || height > maxDim) {
+              if (width >= height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            URL.revokeObjectURL(objectUrl);
+            resolve(dataUrl);
+          } catch (err) {
+            URL.revokeObjectURL(objectUrl);
+            reject(err);
+          }
+        };
+
+        img.onerror = (err) => {
+          URL.revokeObjectURL(objectUrl);
+          reject(err);
+        };
+
+        img.src = objectUrl;
+      });
+    }
+
+    // =========================================================================
+    // 3. UI RENDERING & STATE ACTIONS
+    // =========================================================================
+
+    function switchRoute(routeId) {
+      if (!ROUTES[routeId]) return;
+      currentRoute = routeId;
+      localStorage.setItem('closing_route', routeId);
+      updateTabsUI();
+      renderLocationCards();
+      updateBottomBarState();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function switchLayoutMode(mode) {
+      layoutMode = mode;
+      localStorage.setItem('closing_layout', mode);
+      updateLayoutToggleUI();
+    }
+
+    function updateTabsUI() {
+      const gfBtn = document.getElementById('tab-gf');
+      const b1fBtn = document.getElementById('tab-b1f');
+
+      const activeClasses = ['bg-white', 'text-brand', 'shadow-sm'];
+      const inactiveClasses = ['bg-transparent', 'text-stone-600', 'shadow-none'];
+
+      if (currentRoute === 'gf') {
+        gfBtn.classList.add(...activeClasses);
+        gfBtn.classList.remove(...inactiveClasses);
+        gfBtn.setAttribute('aria-selected', 'true');
+
+        b1fBtn.classList.remove(...activeClasses);
+        b1fBtn.classList.add(...inactiveClasses);
+        b1fBtn.setAttribute('aria-selected', 'false');
+      } else {
+        b1fBtn.classList.add(...activeClasses);
+        b1fBtn.classList.remove(...inactiveClasses);
+        b1fBtn.setAttribute('aria-selected', 'true');
+
+        gfBtn.classList.remove(...activeClasses);
+        gfBtn.classList.add(...inactiveClasses);
+        gfBtn.setAttribute('aria-selected', 'false');
+      }
+    }
+
+    function updateLayoutToggleUI() {
+      const splitBtn = document.getElementById('mode-split');
+      const longBtn = document.getElementById('mode-long');
+
+      const activeClasses = ['bg-white', 'text-ink', 'shadow-xs'];
+      const inactiveClasses = ['bg-transparent', 'text-stone-500'];
+
+      if (layoutMode === 'split') {
+        splitBtn.classList.add(...activeClasses);
+        splitBtn.classList.remove(...inactiveClasses);
+        longBtn.classList.remove(...activeClasses);
+        longBtn.classList.add(...inactiveClasses);
+      } else {
+        longBtn.classList.add(...activeClasses);
+        longBtn.classList.remove(...inactiveClasses);
+        splitBtn.classList.remove(...activeClasses);
+        splitBtn.classList.add(...inactiveClasses);
+      }
+    }
+
+    function getCurrentRoutePhotosFlattened() {
+      const route = ROUTES[currentRoute];
+      const result = [];
+      for (const loc of route.locations) {
+        const list = photosByLoc[loc.id] || [];
+        for (const p of list) {
+          result.push({
+            ...p,
+            locName: loc.name
+          });
+        }
+      }
+      return result;
+    }
+
+    function updateBottomBarState() {
+      const hasAnyPhoto = getCurrentRoutePhotosFlattened().length > 0;
+      document.getElementById('btn-generate').disabled = !hasAnyPhoto;
+      document.getElementById('btn-clear').disabled = !hasAnyPhoto;
+    }
+
+    function renderLocationCards() {
+      const container = document.getElementById('locations-container');
+      const route = ROUTES[currentRoute];
+      container.innerHTML = '';
+
+      route.locations.forEach((loc) => {
+        const photos = photosByLoc[loc.id] || [];
+        const hasPhoto = photos.length > 0;
+
+        const card = document.createElement('section');
+        card.className = hasPhoto
+          ? 'bg-white rounded-2xl p-4 shadow-xs border-2 border-emerald-500/45 transition-all'
+          : 'bg-white rounded-2xl p-4 shadow-xs border border-stone-200/80 transition-all';
+
+        // Top row: Location Name + subtle green check badge (NO numbers) + Action Buttons
+        const topRow = document.createElement('div');
+        topRow.className = 'flex items-center justify-between gap-3';
+
+        const titleWrap = document.createElement('div');
+        titleWrap.className = 'flex items-center gap-2 min-w-0 flex-1';
+
+        if (hasPhoto) {
+          const checkBadge = document.createElement('span');
+          checkBadge.className = 'shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center';
+          checkBadge.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.8" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          `;
+          titleWrap.appendChild(checkBadge);
+        }
+
+        const titleEl = document.createElement('h2');
+        titleEl.className = 'text-[15px] font-bold text-ink leading-snug break-words';
+        titleEl.textContent = loc.name;
+        titleWrap.appendChild(titleEl);
+
+        // Action Buttons (Gallery secondary + Camera primary)
+        const actionsWrap = document.createElement('div');
+        actionsWrap.className = 'flex items-center gap-2 shrink-0';
+
+        const galleryBtn = document.createElement('button');
+        galleryBtn.type = 'button';
+        galleryBtn.className = 'h-11 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 active:scale-95 text-stone-600 text-xs font-semibold flex items-center gap-1 transition';
+        galleryBtn.setAttribute('aria-label', `${loc.name} 從相簿揀相`);
+        galleryBtn.innerHTML = `
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <span>相簿</span>
+        `;
+        galleryBtn.onclick = () => triggerFileInput(loc.id, 'gallery');
+
+        const cameraBtn = document.createElement('button');
+        cameraBtn.type = 'button';
+        cameraBtn.className = hasPhoto
+          ? 'h-11 px-3.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-brand border border-emerald-200 text-sm font-bold flex items-center gap-1.5 transition'
+          : 'h-11 px-4 rounded-xl bg-brand hover:bg-brandDark active:scale-95 text-white text-sm font-bold flex items-center gap-1.5 shadow-xs transition';
+        cameraBtn.setAttribute('aria-label', `${loc.name} 影相`);
+        cameraBtn.innerHTML = `
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span>影相</span>
+        `;
+        cameraBtn.onclick = () => triggerFileInput(loc.id, 'camera');
+
+        actionsWrap.appendChild(galleryBtn);
+        actionsWrap.appendChild(cameraBtn);
+
+        topRow.appendChild(titleWrap);
+        topRow.appendChild(actionsWrap);
+        card.appendChild(topRow);
+
+        // Thumbnails Row (if photos attached)
+        if (hasPhoto) {
+          const thumbGrid = document.createElement('div');
+          thumbGrid.className = 'mt-3 pt-3 border-t border-stone-100 flex flex-wrap gap-2.5';
+
+          photos.forEach((photo) => {
+            const thumbWrap = document.createElement('div');
+            thumbWrap.className = 'relative w-20 h-20 rounded-xl overflow-hidden bg-stone-100 ring-1 ring-stone-200/80 shrink-0';
+
+            const img = document.createElement('img');
+            img.src = photo.dataUrl;
+            img.alt = loc.name;
+            img.className = 'w-full h-full object-cover cursor-pointer';
+            img.onclick = () => openLightbox(photo, loc.name);
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'absolute top-1 right-1 w-6 h-6 rounded-full bg-black/65 text-white flex items-center justify-center hover:bg-red-600 active:scale-90 transition';
+            delBtn.setAttribute('aria-label', '刪除相片');
+            delBtn.innerHTML = `
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.6" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            `;
+            delBtn.onclick = (e) => {
+              e.stopPropagation();
+              deletePhoto(loc.id, photo.id);
+            };
+
+            thumbWrap.appendChild(img);
+            thumbWrap.appendChild(delBtn);
+            thumbGrid.appendChild(thumbWrap);
+          });
+
+          card.appendChild(thumbGrid);
+        }
+
+        container.appendChild(card);
+      });
+    }
+
+    // =========================================================================
+    // 4. PHOTO CAPTURE & GALLERY HANDLING
+    // =========================================================================
+
+    function triggerFileInput(locId, type) {
+      activeLocIdForInput = locId;
+      const input = document.getElementById(type === 'camera' ? 'input-camera' : 'input-gallery');
+      input.value = '';
+      input.click();
+    }
+
+    async function handleFilesSelected(files) {
+      if (!files || files.length === 0 || !activeLocIdForInput) return;
+      const targetLocId = activeLocIdForInput;
+      const targetRoute = currentRoute;
+
+      showLoading('正在壓縮相片...');
+
+      try {
+        if (!photosByLoc[targetLocId]) photosByLoc[targetLocId] = [];
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          if (!file.type.startsWith('image/')) continue;
+
+          const dataUrl = await compressImageFile(file, 1280, 0.8);
+          const record = {
+            id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            route: targetRoute,
+            locId: targetLocId,
+            dataUrl,
+            createdAt: Date.now() + i
+          };
+
+          photosByLoc[targetLocId].push(record);
+          await savePhotoToDB(record);
+        }
+
+        renderLocationCards();
+        updateBottomBarState();
+      } catch (err) {
+        console.error('Error processing image:', err);
+        showToast('讀取相片時出錯，請重試');
+      } finally {
+        hideLoading();
+      }
+    }
+
+    async function deletePhoto(locId, photoId) {
+      if (photosByLoc[locId]) {
+        photosByLoc[locId] = photosByLoc[locId].filter((p) => p.id !== photoId);
+        if (photosByLoc[locId].length === 0) {
+          delete photosByLoc[locId];
+        }
+      }
+      await deletePhotoFromDB(photoId);
+      renderLocationCards();
+      updateBottomBarState();
+    }
+
+    // =========================================================================
+    // 5. CLEAR ROUTE CONFIRMATION DIALOG
+    // =========================================================================
+
+    function openClearConfirm() {
+      const routeName = ROUTES[currentRoute].tabName;
+      document.getElementById('confirm-modal-desc').textContent =
+        `確定要清空「${routeName}」嘅所有相片？清空後無法復原。`;
+      document.getElementById('confirm-modal').classList.remove('hidden');
+    }
+
+    function closeClearConfirm() {
+      document.getElementById('confirm-modal').classList.add('hidden');
+    }
+
+    async function confirmClearRoute() {
+      closeClearConfirm();
+      const route = ROUTES[currentRoute];
+      for (const loc of route.locations) {
+        delete photosByLoc[loc.id];
+      }
+      await clearRoutePhotosFromDB(currentRoute);
+      renderLocationCards();
+      updateBottomBarState();
+      showToast('已清空本路線相片');
+    }
+
+    // =========================================================================
+    // 6. LIGHTBOX PREVIEW
+    // =========================================================================
+
+    function openLightbox(photo, locName) {
+      lightboxPhotoRef = photo;
+      document.getElementById('lightbox-title').textContent = locName;
+      document.getElementById('lightbox-img').src = photo.dataUrl;
+      document.getElementById('lightbox-delete-btn').onclick = async () => {
+        const ref = lightboxPhotoRef;
+        closeLightbox();
+        if (ref) {
+          await deletePhoto(ref.locId, ref.id);
+        }
+      };
+      document.getElementById('lightbox-modal').classList.remove('hidden');
+    }
+
+    function closeLightbox(event) {
+      if (event && event.target && event.target.id !== 'lightbox-modal') return;
+      document.getElementById('lightbox-modal').classList.add('hidden');
+      lightboxPhotoRef = null;
+    }
+
+    // =========================================================================
+    // 7. COLLAGE GENERATION ENGINE (HTML5 Canvas)
+    // =========================================================================
+
+    function loadImageElement(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = (err) => reject(err);
+        img.src = src;
+      });
+    }
+
+    /**
+     * Cross-browser rounded rectangle path helper
+     */
+    function traceRoundedRect(ctx, x, y, w, h, r) {
+      const radius = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + w - radius, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+      ctx.lineTo(x + w, y + h - radius);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+      ctx.lineTo(x + radius, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    }
+
+    /**
+     * Render a single collage canvas for a given array of photo objects.
+     * Displays ONLY route title at top and ONLY location name at bottom of each cell.
+     * NO date, NO time, NO counter, NO page numbers.
+     */
+    async function renderCollageCanvas(photoItems, routeTitle, canvasWidth) {
+      const count = photoItems.length;
+      const cols = count === 1 ? 1 : 2;
+      const rows = Math.ceil(count / cols);
+
+      const outerPad = Math.round(canvasWidth * 0.025); // ~40px at 1600w
+      const gap = Math.round(canvasWidth * 0.018);      // ~28px at 1600w
+      const headerHeight = Math.round(canvasWidth * 0.068); // ~108px at 1600w
+
+      const cellWidth = Math.floor((canvasWidth - outerPad * 2 - gap * (cols - 1)) / cols);
+      // Clean 4:3 aspect ratio for neat uniform grid
+      const cellHeight = Math.round((cellWidth * 3) / 4);
+      const cellRadius = Math.round(canvasWidth * 0.012);
+
+      const canvasHeight = headerHeight + outerPad + rows * cellHeight + (rows - 1) * gap + outerPad;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+      const ctx = canvas.getContext('2d');
+
+      // 1. Clean light neutral canvas background
+      ctx.fillStyle = '#F5F5F3';
+      ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+      // 2. Simple Clean Top Header Bar (ONLY route title)
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvasWidth, headerHeight);
+
+      // Subtle bottom divider line under header
+      ctx.fillStyle = '#E5E5E0';
+      ctx.fillRect(0, headerHeight - 2, canvasWidth, 2);
+
+      // Accent bar on left of header
+      const accentH = Math.round(headerHeight * 0.44);
+      const accentY = Math.round((headerHeight - accentH) / 2);
+      ctx.fillStyle = '#2E6F5E';
+      traceRoundedRect(ctx, outerPad, accentY, 10, accentH, 5);
+      ctx.fill();
+
+      // Route Title Text
+      const titleFontSize = Math.round(canvasWidth * 0.028);
+      ctx.fillStyle = '#1F2421';
+      ctx.font = `700 ${titleFontSize}px "PingFang HK", "Noto Sans TC", "Microsoft JhengHei", sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.fillText(routeTitle, outerPad + 24, headerHeight / 2 + 1);
+
+      // 3. Draw Each Photo Cell (4:3 center-cover crop + location name bar)
+      const labelFontSize = Math.round(cellWidth * 0.052);
+      const labelBarHeight = Math.round(cellHeight * 0.19);
+
+      for (let i = 0; i < count; i++) {
+        const item = photoItems[i];
+        const colIdx = i % cols;
+        const rowIdx = Math.floor(i / cols);
+
+        const x = outerPad + colIdx * (cellWidth + gap);
+        const y = headerHeight + outerPad + rowIdx * (cellHeight + gap);
+
+        const img = await loadImageElement(item.dataUrl);
+
+        ctx.save();
+        // Clip to rounded cell
+        traceRoundedRect(ctx, x, y, cellWidth, cellHeight, cellRadius);
+        ctx.clip();
+
+        // Fill cell fallback background
+        ctx.fillStyle = '#E7E5E4';
+        ctx.fillRect(x, y, cellWidth, cellHeight);
+
+        // Center-cover cropping math
+        const imgRatio = img.width / img.height;
+        const cellRatio = cellWidth / cellHeight;
+        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+
+        if (imgRatio > cellRatio) {
+          // Image is wider than cell -> crop left & right
+          sw = img.height * cellRatio;
+          sx = (img.width - sw) / 2;
+        } else {
+          // Image is taller than cell -> crop top & bottom
+          sh = img.width / cellRatio;
+          sy = (img.height - sh) / 2;
+        }
+
+        ctx.drawImage(img, sx, sy, sw, sh, x, y, cellWidth, cellHeight);
+
+        // Dark semi-transparent gradient along bottom for crisp legibility
+        const grad = ctx.createLinearGradient(x, y + cellHeight - labelBarHeight * 1.45, x, y + cellHeight);
+        grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        grad.addColorStop(0.45, 'rgba(0, 0, 0, 0.48)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0.78)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(x, y + cellHeight - labelBarHeight * 1.45, cellWidth, labelBarHeight * 1.45);
+
+        // Crisp bold location name ONLY
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `700 ${labelFontSize}px "PingFang HK", "Noto Sans TC", "Microsoft JhengHei", sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+
+        const textPadX = Math.round(cellWidth * 0.036);
+        const textCenterY = y + cellHeight - Math.round(labelBarHeight * 0.46);
+        ctx.fillText(item.locName, x + textPadX, textCenterY, cellWidth - textPadX * 2);
+
+        ctx.restore();
+
+        // Subtle crisp border around each cell
+        ctx.save();
+        traceRoundedRect(ctx, x, y, cellWidth, cellHeight, cellRadius);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Export as high-quality JPEG Blob & DataURL
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+      const dataUrl = URL.createObjectURL(blob);
+      return { blob, dataUrl };
+    }
+
+    async function handleGenerateCollage() {
+      const photos = getCurrentRoutePhotosFlattened();
+      if (photos.length === 0) return;
+
+      showLoading('正在合成高清拼圖...');
+
+      // Clean up any previous generated Object URLs
+      cleanupGeneratedCollages();
+
+      try {
+        const route = ROUTES[currentRoute];
+        const chunks = [];
+
+        if (layoutMode === 'split') {
+          // Mode 1: Up to 6 photos per collage image (1600px wide)
+          for (let i = 0; i < photos.length; i += 6) {
+            chunks.push(photos.slice(i, i + 6));
+          }
+        } else {
+          // Mode 2: Single long vertical collage (1400px wide)
+          chunks.push(photos);
+        }
+
+        const targetWidth = layoutMode === 'split' ? 1600 : 1400;
+
+        for (let i = 0; i < chunks.length; i++) {
+          const { blob, dataUrl } = await renderCollageCanvas(
+            chunks[i],
+            route.collageTitle,
+            targetWidth
+          );
+
+          const suffix = chunks.length > 1 ? `_${i + 1}` : '';
+          const fileName = `${route.filePrefix}${suffix}.jpg`;
+
+          generatedCollages.push({ blob, dataUrl, fileName });
+        }
+
+        openExportModal();
+      } catch (err) {
+        console.error('Collage generation failed:', err);
+        showToast('合成拼圖失敗，請再試一次');
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function cleanupGeneratedCollages() {
+      for (const item of generatedCollages) {
+        try {
+          URL.revokeObjectURL(item.dataUrl);
+        } catch (_) {}
+      }
+      generatedCollages = [];
+    }
+
+    // =========================================================================
+    // 8. EXPORT / PREVIEW MODAL & WEB SHARE API
+    // =========================================================================
+
+    function canUseWebShareFiles(files) {
+      try {
+        return Boolean(
+          navigator.share &&
+          navigator.canShare &&
+          navigator.canShare({ files })
+        );
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function openExportModal() {
+      const route = ROUTES[currentRoute];
+      document.getElementById('export-modal-title').textContent = route.collageTitle;
+
+      const body = document.getElementById('export-modal-body');
+      body.innerHTML = '';
+
+      // Check if Web Share API supports file sharing on this device
+      const testFiles = generatedCollages.map(
+        (c) => new File([c.blob], c.fileName, { type: 'image/jpeg' })
+      );
+      const supportsShare = canUseWebShareFiles(testFiles);
+
+      // Show "Share All" button if multiple images and Web Share is supported
+      const shareAllBtn = document.getElementById('btn-share-all');
+      if (supportsShare && generatedCollages.length > 1) {
+        shareAllBtn.classList.remove('hidden');
+      } else {
+        shareAllBtn.classList.add('hidden');
+      }
+
+      generatedCollages.forEach((collage, idx) => {
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-2xl p-3 shadow-xs border border-stone-200/80 space-y-3';
+
+        const img = document.createElement('img');
+        img.src = collage.dataUrl;
+        img.alt = route.collageTitle;
+        img.className = 'w-full h-auto rounded-xl border border-stone-100 select-auto';
+
+        const btnRow = document.createElement('div');
+        btnRow.className = supportsShare ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-1';
+
+        if (supportsShare) {
+          const shareBtn = document.createElement('button');
+          shareBtn.type = 'button';
+          shareBtn.className = 'py-3 px-3 rounded-xl bg-brand hover:bg-brandDark text-white font-bold text-sm active:scale-[0.98] transition flex items-center justify-center gap-1.5';
+          shareBtn.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+            <span>直接分享</span>
+          `;
+          shareBtn.onclick = () => shareSingleCollage(idx);
+          btnRow.appendChild(shareBtn);
+        }
+
+        const downloadBtn = document.createElement('button');
+        downloadBtn.type = 'button';
+        downloadBtn.className = supportsShare
+          ? 'py-3 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-ink font-semibold text-sm active:scale-[0.98] transition flex items-center justify-center gap-1.5'
+          : 'py-3 px-4 rounded-xl bg-brand hover:bg-brandDark text-white font-bold text-sm active:scale-[0.98] transition flex items-center justify-center gap-1.5';
+        downloadBtn.innerHTML = `
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <span>下載圖片</span>
+        `;
+        downloadBtn.onclick = () => downloadCollage(idx);
+
+        btnRow.appendChild(downloadBtn);
+        card.appendChild(img);
+        card.appendChild(btnRow);
+        body.appendChild(card);
+      });
+
+      document.getElementById('export-modal').classList.remove('hidden');
+    }
+
+    function closeExportModal() {
+      document.getElementById('export-modal').classList.add('hidden');
+    }
+
+    async function shareSingleCollage(index) {
+      const item = generatedCollages[index];
+      if (!item) return;
+      try {
+        const file = new File([item.blob], item.fileName, { type: 'image/jpeg' });
+        await navigator.share({ files: [file] });
+      } catch (err) {
+        // Ignore user cancelling share sheet
+        if (err && err.name !== 'AbortError') {
+          showToast('未能開啟分享，請撳「下載圖片」或長按圖片儲存');
+        }
+      }
+    }
+
+    async function shareAllCollages() {
+      if (generatedCollages.length === 0) return;
+      try {
+        const files = generatedCollages.map(
+          (item) => new File([item.blob], item.fileName, { type: 'image/jpeg' })
+        );
+        await navigator.share({ files });
+      } catch (err) {
+        if (err && err.name !== 'AbortError') {
+          showToast('未能一次過分享全部，請逐張分享或下載');
+        }
+      }
+    }
+
+    function downloadCollage(index) {
+      const item = generatedCollages[index];
+      if (!item) return;
+      const a = document.createElement('a');
+      a.href = item.dataUrl;
+      a.download = item.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast('已開始下載圖片');
+    }
+
+    // =========================================================================
+    // 9. LOADING & TOAST HELPERS
+    // =========================================================================
+
+    function showLoading(text) {
+      document.getElementById('loading-text').textContent = text || '處理中...';
+      document.getElementById('loading-overlay').classList.remove('hidden');
+    }
+
+    function hideLoading() {
+      document.getElementById('loading-overlay').classList.add('hidden');
+    }
+
+    let toastTimer = null;
+    function showToast(message) {
+      const el = document.getElementById('toast');
+      el.textContent = message;
+      el.classList.remove('hidden');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        el.classList.add('hidden');
+      }, 2600);
+    }
+
+    // =========================================================================
+    // 10. INITIALIZATION
+    // =========================================================================
+
+    async function initApp() {
+      // Attach file input listeners
+      document.getElementById('input-camera').addEventListener('change', (e) => {
+        handleFilesSelected(e.target.files);
+      });
+      document.getElementById('input-gallery').addEventListener('change', (e) => {
+        handleFilesSelected(e.target.files);
+      });
+
+      // Initialize IndexedDB & restore saved photos
+      await initDB();
+      await loadAllPhotosFromDB();
+
+      // Render initial UI
+      updateTabsUI();
+      updateLayoutToggleUI();
+      renderLocationCards();
+      updateBottomBarState();
+    }
+
+    window.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>
